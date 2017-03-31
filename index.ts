@@ -37,13 +37,24 @@ async function waitToPlace(savefile: string): Promise<void> {
     if(!exists) return;
     const contents = await fs.readFile(savefile)
     const data = JSON.parse(contents.toString());
-    const waitTime = data.wait_seconds * 1000;
-    console.log(`waiting ${waitTime}`);
-    return new Promise((resolve) => setTimeout(resolve, waitTime)).then(() => undefined);;
+    const waitTime = data.nextPlace - new Date().getTime();
+
+    console.log(`waiting ${waitTime / 1000}`);
+
+    const i = setInterval(() => {
+        const waitTime = data.nextPlace - new Date().getTime();
+        console.log(`waiting ${waitTime / 1000}`);
+    }, 10000);
+
+    await new Promise((resolve) => setTimeout(resolve, waitTime)).then(() => undefined);;
+
+    clearInterval(i);
 }
 
-function saveWaitTime(savefile: string, data: string) {
-    return fs.writeFile(savefile, data);
+function saveWaitTime(savefile: string, wait_seconds: number) {
+    const nextPlace = new Date(new Date().getTime() + wait_seconds * 1000).getTime();
+    const fileContents = JSON.stringify({nextPlace});
+    return fs.writeFile(savefile, fileContents);
 }
 
 async function place(x: number, y: number, color: number, user: User) {
@@ -72,7 +83,7 @@ async function doPlace(x: number, y: number, color: number, user: User) {
 
     const s = JSON.stringify(data);
     console.log(s);
-    return saveWaitTime(savefile, s);
+    return saveWaitTime(savefile, (data as any).wait_seconds);
 }
 
 interface User {
