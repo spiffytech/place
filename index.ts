@@ -22,62 +22,57 @@ client.on("connect", (connection) => {
     })
 });
 
-function getModhash(cookie: string) {
-    return fetch(
+async function getModhash(cookie: string) {
+    const response = await fetch(
         "https://reddit.com/api/me.json",
         {headers: {Cookie: cookie}}
-    ).
-    then((r) => r.json()).
-    then((j: any) => j.data.modhash).
-    catch(r => {
-        console.error("couldn't me", r);
-        throw r;
-    });
+    );
+    const json = await response.json();
+    return json.data.modhash;
 }
 
-function waitToPlace(savefile: string): Promise<null> {
-    return fs.exists(savefile).
-    then((exists) => {
-        if(!exists) return;
-        return fs.readFile(savefile).then((contents) => JSON.parse(contents.toString())).
-        then((data) => console.log(data.wait_time));
-    });
+async function waitToPlace(savefile: string): Promise<void> {
+    const exists = await fs.exists(savefile);
+
+    if(!exists) return;
+    const contents = await fs.readFile(savefile)
+    const data = JSON.parse(contents.toString());
+    const waitTime = data.wait_seconds * 1000;
+    console.log(`waiting ${waitTime}`);
+    return new Promise((resolve) => setTimeout(resolve, waitTime)).then(() => undefined);;
 }
 
 function saveWaitTime(savefile: string, data: string) {
     return fs.writeFile(savefile, data);
 }
 
-function place(x: number, y: number, color: number, user: User) {
+async function place(x: number, y: number, color: number, user: User) {
     const form = new FormData();
     form.append("x", x);
     form.append("y", y);
     form.append("color", color);
-    return getModhash(user.cookie).
-    then((modhash: string) => fetch("https://www.reddit.com/api/place/draw.json", {
+
+    const modhash = await getModhash(user.cookie);
+    const response = await fetch("https://www.reddit.com/api/place/draw.json", {
         method: "POST",
         headers: {
             "X-Modhash": modhash,
             "Cookie": user.cookie
         },
         body: form
-    })).
-    then((r) => r.json()).
-    catch((err) => {
-        console.error(err);
-        throw err;
     });
+
+    return await response.json();
 }
 
-function doPlace(x: number, y: number, color: number, user: User) {
+async function doPlace(x: number, y: number, color: number, user: User) {
     const savefile = `${user.username}.json`;
-    return waitToPlace(savefile).
-    then(() => place(x, y, color, user)).
-    then((data: object) => {
-        const s = JSON.stringify(data);
-        console.log(s);
-        return saveWaitTime(savefile, s);
-    });
+    await waitToPlace(savefile);
+    const data: object = await place(x, y, color, user);
+
+    const s = JSON.stringify(data);
+    console.log(s);
+    return saveWaitTime(savefile, s);
 }
 
 interface User {
